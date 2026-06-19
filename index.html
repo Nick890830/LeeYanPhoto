@@ -164,7 +164,9 @@ let categories = ['婚礼·跟拍', '订婚·领证', '亲子·抓周']
 let uploadFiles = []
 let uploadAlbumId = null
 let uploadAlbumTitle = ''
+let _password = ''
 let cdb = null
+let _app = null
 
 // Utils
 function sha256(str) {
@@ -184,6 +186,17 @@ function toast(msg) {
 
 function $(id) { return document.getElementById(id) }
 
+// Cloud API: 通过云函数执行写操作
+async function callApi(action, data) {
+  const res = await _app.callFunction({
+    name: 'adminApi',
+    data: { action, password: _password, data }
+  })
+  const result = res.result || {}
+  if (result.code !== 0) throw new Error(result.message || '操作失败')
+  return result
+}
+
 // Login
 async function handleLogin() {
   const pw = $('passwordInput').value
@@ -197,6 +210,7 @@ async function handleLogin() {
     return
   }
 
+  _password = pw
   $('loginError').style.display = 'none'
   await initCloud()
   $('loginScreen').classList.add('hidden')
@@ -210,10 +224,9 @@ $('passwordInput').addEventListener('keydown', e => { if (e.key === 'Enter') han
 // CloudBase Init
 async function initCloud() {
   try {
-    const app = cloudbase.init({ env: ENV_ID })
-    await app.auth({ persistence: 'local' }).signInAnonymously()
-    cdb = app.database()
-    window._app = app
+    _app = cloudbase.init({ env: ENV_ID })
+    await _app.auth({ persistence: 'local' }).signInAnonymously()
+    cdb = _app.database()
     return true
   } catch (e) {
     toast('云环境连接失败: ' + e.message)
@@ -224,6 +237,7 @@ async function initCloud() {
 
 // Logout
 $('logoutBtn').addEventListener('click', () => {
+  _password = ''
   $('app').classList.remove('visible')
   $('loginScreen').classList.remove('hidden')
   $('passwordInput').value = ''
@@ -239,7 +253,6 @@ async function loadAlbums() {
     const res = await cdb.collection('albums').orderBy('order', 'asc').get()
     const data = res.data || []
 
-    // Get photo counts
     const counts = await Promise.all(data.map(a =>
       cdb.collection('photos').where({ albumId: a._id }).count()
         .then(r => ({ id: a._id, count: r.total }))
@@ -330,16 +343,7 @@ $('modalConfirm').addEventListener('click', async () => {
 
   $('newAlbumModal').classList.remove('show')
   try {
-    await cdb.collection('albums').add({
-      data: {
-        title: name,
-        category: currentCategory,
-        coverUrl: '',
-        order: Date.now(),
-        photoCount: 0,
-        createTime: new Date()
-      }
-    })
+    await callApi('createAlbum', { title: name, category: currentCategory })
     toast('创建成功')
     loadAlbums()
   } catch (e) {
@@ -383,7 +387,7 @@ $('uploadBtn').addEventListener('click', async () => {
 
   const total = uploadFiles.length
   let completed = 0
-  let firstPhotoId = null
+  const uploadedFiles = []
 
   for (let i = 0; i < total; i++) {
     const file = uploadFiles[i]
@@ -391,25 +395,8 @@ $('uploadBtn').addEventListener('click', async () => {
     const cloudPath = `photos/${uploadAlbumId}/${Date.now()}_${i}.${ext}`
 
     try {
-      const result = await window._app.uploadFile({
-        cloudPath,
-        filePath: file
-      })
-
-      await cdb.collection('photos').add({
-        data: {
-          albumId: uploadAlbumId,
-          imageUrl: result.fileID,
-          order: Date.now() + i,
-          width: 1365,
-          height: 2048,
-          createTime: new Date()
-        }
-      })
-
-      if (i === 0) {
-        firstPhotoId = result.fileID
-      }
+      const result = await _app.uploadFile({ cloudPath, filePath: file })
+      uploadedFiles.push({ fileID: result.fileID, width: 1365, height: 2048 })
     } catch (e) {
       console.error('Upload error:', e)
     }
@@ -418,16 +405,12 @@ $('uploadBtn').addEventListener('click', async () => {
     $('progressBar').style.width = (completed / total * 100) + '%'
   }
 
-  // Set cover if album has no cover
-  if (firstPhotoId) {
+  if (uploadedFiles.length > 0) {
     try {
-      const album = await cdb.collection('albums').doc(uploadAlbumId).get()
-      if (!album.data.coverUrl) {
-        await cdb.collection('albums').doc(uploadAlbumId).update({
-          data: { coverUrl: firstPhotoId }
-        })
-      }
-    } catch (e) {}
+      await callApi('uploadPhotos', { albumId: uploadAlbumId, files: uploadedFiles })
+    } catch (e) {
+      toast('入库失败: ' + e.message)
+    }
   }
 
   toast(`上传完成: ${completed}/${total}`)
@@ -441,8 +424,7 @@ async function deleteAlbum(id, title) {
   if (!confirm(`确定删除「${title}」吗？里面的照片也会一起删除。`)) return
 
   try {
-    await cdb.collection('photos').where({ albumId: id }).remove()
-    await cdb.collection('albums').doc(id).remove()
+    await callApi('deleteAlbum', { id })
     toast('已删除')
     loadAlbums()
   } catch (e) {
