@@ -240,7 +240,12 @@ async function initCloud() {
   try {
     _app = cloudbase.init({ env: ENV_ID })
     if (!_app) throw new Error('SDK 初始化返回空')
-    await _app.auth({ persistence: 'local' }).signInAnonymously()
+
+    const auth = _app.auth()
+    if (typeof auth.signInAnonymously !== 'function') {
+      throw new Error('auth() 返回的对象缺少 signInAnonymously 方法，可用方法: ' + Object.keys(auth).filter(k => typeof auth[k] === 'function').join(', '))
+    }
+    await auth.signInAnonymously()
     cdb = _app.database()
     _cloudReady = true
     console.log('CloudBase connected')
