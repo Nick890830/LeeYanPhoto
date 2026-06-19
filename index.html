@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LeeYanPhoto 管理后台</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root { --primary: #1a1a1a; --text: #333; --text2: #999; --bg: #f5f5f5; --border: #eee; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', sans-serif; font-size: 14px; color: var(--text); background: #fff; -webkit-font-smoothing: antialiased; }
+
+/* Login */
+.login-screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; background: #fff; z-index: 100; }
+.login-screen.hidden { display: none; }
+.login-title { font-size: 24px; font-weight: 300; letter-spacing: 4px; color: var(--primary); margin-bottom: 8px; }
+.login-sub { font-size: 12px; color: var(--text2); margin-bottom: 40px; }
+.login-input { width: 100%; max-width: 300px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; outline: none; text-align: center; letter-spacing: 8px; }
+.login-input:focus { border-color: var(--primary); }
+.login-btn { width: 100%; max-width: 300px; margin-top: 16px; padding: 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 15px; cursor: pointer; }
+.login-btn:active { opacity: 0.8; }
+.login-error { color: #ff4444; font-size: 13px; margin-top: 12px; display: none; }
+
+/* App */
+.app { display: none; }
+.app.visible { display: block; }
+
+/* Header */
+.header { position: sticky; top: 0; background: #fff; z-index: 10; border-bottom: 1px solid var(--border); }
+.header-top { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; }
+.header-title { font-size: 18px; font-weight: 500; color: var(--primary); letter-spacing: 2px; }
+.header-logout { font-size: 13px; color: var(--text2); cursor: pointer; padding: 4px 8px; }
+.header-logout:active { opacity: 0.6; }
+
+/* Tabs */
+.tabs { display: flex; padding: 0 20px; gap: 0; border-bottom: 1px solid var(--border); }
+.tab { padding: 12px 16px; font-size: 14px; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
+.tab:active { opacity: 0.7; }
+
+/* Actions */
+.actions { padding: 16px 20px; display: flex; gap: 12px; }
+.btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; border: none; cursor: pointer; }
+.btn:active { opacity: 0.8; }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-danger { background: #fff; color: #ff4444; border: 1px solid #ff4444; }
+.btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Albums */
+.albums { padding: 0 20px 120px; }
+.album-card { display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--border); gap: 16px; }
+.album-cover { width: 72px; height: 108px; border-radius: 6px; background: var(--bg); flex-shrink: 0; object-fit: cover; }
+.album-info { flex: 1; min-width: 0; }
+.album-title { font-size: 15px; color: var(--primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.album-count { font-size: 12px; color: var(--text2); }
+.album-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.empty { text-align: center; padding: 60px 0; color: var(--text2); font-size: 14px; }
+
+/* Upload overlay */
+.upload-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: none; align-items: flex-end; }
+.upload-overlay.show { display: flex; }
+.upload-panel { background: #fff; border-radius: 16px 16px 0 0; width: 100%; max-height: 80vh; overflow-y: auto; padding: 24px 20px; }
+.upload-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
+.upload-file-btn { display: inline-block; padding: 12px 24px; border: 1px dashed #ccc; border-radius: 8px; color: var(--text2); cursor: pointer; margin-bottom: 16px; }
+.upload-file-btn:active { background: var(--bg); }
+.upload-previews { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.upload-preview { aspect-ratio: 1; border-radius: 6px; overflow: hidden; background: var(--bg); position: relative; }
+.upload-preview img { width: 100%; height: 100%; object-fit: cover; }
+.upload-progress { height: 4px; background: var(--border); border-radius: 2px; margin: 12px 0; overflow: hidden; }
+.upload-progress-bar { height: 100%; background: var(--primary); border-radius: 2px; width: 0; transition: width 0.3s; }
+
+/* Toast */
+.toast { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 10px 24px; border-radius: 20px; font-size: 13px; z-index: 200; display: none; }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: var(--text2); }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 50; display: none; align-items: center; justify-content: center; padding: 32px; }
+.modal-overlay.show { display: flex; }
+.modal-box { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 360px; }
+.modal-title { font-size: 16px; font-weight: 500; margin-bottom: 16px; }
+.modal-input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; margin-bottom: 16px; }
+.modal-input:focus { border-color: var(--primary); }
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.modal-actions .btn { min-width: 80px; }
+</style>
+</head>
+<body>
+
+<!-- Login Screen -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-title">LeeYanPhoto</div>
+  <div class="login-sub">管理后台</div>
+  <input class="login-input" type="password" id="passwordInput" placeholder="密码" maxlength="10" autocomplete="off">
+  <button class="login-btn" id="loginBtn">登录</button>
+  <div class="login-error" id="loginError">密码错误</div>
+</div>
+
+<!-- Main App -->
+<div class="app" id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <span class="header-title">LeeYanPhoto 管理</span>
+      <span class="header-logout" id="logoutBtn">退出</span>
+    </div>
+    <div class="tabs" id="tabs"></div>
+  </div>
+
+  <!-- Actions -->
+  <div class="actions">
+    <button class="btn btn-primary" id="newAlbumBtn">+ 新建影集</button>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" id="loading">加载中...</div>
+
+  <!-- Albums -->
+  <div class="albums" id="albums"></div>
+</div>
+
+<!-- Upload Overlay -->
+<div class="upload-overlay" id="uploadOverlay">
+  <div class="upload-panel">
+    <div class="upload-title" id="uploadTitle">上传照片</div>
+    <label class="upload-file-btn" id="fileLabel">选择照片</label>
+    <input type="file" id="fileInput" multiple accept="image/*" style="display:none">
+    <div class="upload-previews" id="uploadPreviews"></div>
+    <div class="upload-progress"><div class="upload-progress-bar" id="progressBar"></div></div>
+    <div style="display:flex;gap:12px;margin-top:12px">
+      <button class="btn btn-primary" id="uploadBtn" style="flex:1" disabled>开始上传</button>
+      <button class="btn btn-outline" id="uploadCancel" style="flex:1">取消</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Album Modal -->
+<div class="modal-overlay" id="newAlbumModal">
+  <div class="modal-box">
+    <div class="modal-title">新建影集</div>
+    <input class="modal-input" id="albumNameInput" placeholder="影集名称" maxlength="30">
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="modalCancel">取消</button>
+      <button class="btn btn-primary" id="modalConfirm">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@cloudbase/js-sdk@1.3.0/lib/cloudbase.js"></script>
+<script>
+// Config
+const ENV_ID = 'cloudbase-d5gkt78ds66b218a7'
+const PASSWORD_HASH = 'a05e5a9c6b3b7f8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2'
+
+// State
+let currentCategory = '婚礼·跟拍'
+let albums = []
+let categories = ['婚礼·跟拍', '订婚·领证', '亲子·抓周']
+let uploadFiles = []
+let uploadAlbumId = null
+let uploadAlbumTitle = ''
+let cdb = null
+
+// Utils
+function sha256(str) {
+  let buffer = new TextEncoder().encode(str)
+  return crypto.subtle.digest('SHA-256', buffer).then(h => {
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('')
+  })
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = msg
+  t.style.display = 'block'
+  clearTimeout(t._timer)
+  t._timer = setTimeout(() => { t.style.display = 'none' }, 2000)
+}
+
+function $(id) { return document.getElementById(id) }
+
+// Login
+async function handleLogin() {
+  const pw = $('passwordInput').value
+  if (!pw) return
+
+  const hash = await sha256(pw)
+  if (hash !== PASSWORD_HASH) {
+    $('loginError').style.display = 'block'
+    $('passwordInput').value = ''
+    $('passwordInput').focus()
+    return
+  }
+
+  $('loginError').style.display = 'none'
+  await initCloud()
+  $('loginScreen').classList.add('hidden')
+  $('app').classList.add('visible')
+  loadAlbums()
+}
+
+$('loginBtn').addEventListener('click', handleLogin)
+$('passwordInput').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin() })
+
+// CloudBase Init
+async function initCloud() {
+  try {
+    const app = cloudbase.init({ env: ENV_ID })
+    await app.auth({ persistence: 'local' }).signInAnonymously()
+    cdb = app.database()
+    window._app = app
+    return true
+  } catch (e) {
+    toast('云环境连接失败: ' + e.message)
+    console.error(e)
+    return false
+  }
+}
+
+// Logout
+$('logoutBtn').addEventListener('click', () => {
+  $('app').classList.remove('visible')
+  $('loginScreen').classList.remove('hidden')
+  $('passwordInput').value = ''
+  $('passwordInput').focus()
+})
+
+// Load Albums
+async function loadAlbums() {
+  $('loading').style.display = 'block'
+  $('albums').innerHTML = ''
+
+  try {
+    const res = await cdb.collection('albums').orderBy('order', 'asc').get()
+    const data = res.data || []
+
+    // Get photo counts
+    const counts = await Promise.all(data.map(a =>
+      cdb.collection('photos').where({ albumId: a._id }).count()
+        .then(r => ({ id: a._id, count: r.total }))
+        .catch(() => ({ id: a._id, count: 0 }))
+    ))
+    const countMap = {}
+    counts.forEach(c => { countMap[c.id] = c.count })
+
+    albums = data.map(a => ({
+      id: a._id,
+      title: a.title,
+      category: a.category,
+      coverUrl: a.coverUrl || '',
+      photoCount: countMap[a._id] || 0,
+      order: a.order || 0
+    }))
+
+    renderTabs()
+    renderAlbums()
+  } catch (e) {
+    toast('加载失败: ' + e.message)
+  }
+  $('loading').style.display = 'none'
+}
+
+// Render Tabs
+function renderTabs() {
+  const container = $('tabs')
+  container.innerHTML = categories.map(c =>
+    `<div class="tab ${c === currentCategory ? 'active' : ''}" data-cat="${c}">${c}</div>`
+  ).join('')
+
+  container.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', () => {
+      currentCategory = el.dataset.cat
+      container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+      el.classList.add('active')
+      renderAlbums()
+    })
+  })
+}
+
+// Render Albums
+function renderAlbums() {
+  const filtered = albums.filter(a => a.category === currentCategory)
+  const container = $('albums')
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty">暂无影集，点上方「新建影集」添加</div>'
+    return
+  }
+
+  container.innerHTML = filtered.map(a => {
+    const cover = a.coverUrl ? `https://${ENV_ID}.tcb.qcloud.la/${a.coverUrl}` : ''
+    return `
+      <div class="album-card" data-id="${a.id}">
+        <img class="album-cover" src="${cover}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2272%22 height=%22108%22><rect fill=%22%23f5f5f5%22 width=%2272%22 height=%22108%22/></svg>'">
+        <div class="album-info">
+          <div class="album-title">${a.title}</div>
+          <div class="album-count">${a.photoCount} 张照片</div>
+        </div>
+        <div class="album-actions">
+          <button class="btn btn-primary btn-sm upload-btn" data-id="${a.id}" data-title="${a.title}">上传</button>
+          <button class="btn btn-danger btn-sm delete-btn" data-id="${a.id}" data-title="${a.title}">删除</button>
+        </div>
+      </div>
+    `
+  }).join('')
+
+  container.querySelectorAll('.upload-btn').forEach(el => {
+    el.addEventListener('click', () => openUpload(el.dataset.id, el.dataset.title))
+  })
+  container.querySelectorAll('.delete-btn').forEach(el => {
+    el.addEventListener('click', () => deleteAlbum(el.dataset.id, el.dataset.title))
+  })
+}
+
+// New Album
+$('newAlbumBtn').addEventListener('click', () => {
+  $('newAlbumModal').classList.add('show')
+  $('albumNameInput').value = ''
+  $('albumNameInput').focus()
+})
+$('modalCancel').addEventListener('click', () => $('newAlbumModal').classList.remove('show'))
+$('modalConfirm').addEventListener('click', async () => {
+  const name = $('albumNameInput').value.trim()
+  if (!name) return
+
+  $('newAlbumModal').classList.remove('show')
+  try {
+    await cdb.collection('albums').add({
+      data: {
+        title: name,
+        category: currentCategory,
+        coverUrl: '',
+        order: Date.now(),
+        photoCount: 0,
+        createTime: new Date()
+      }
+    })
+    toast('创建成功')
+    loadAlbums()
+  } catch (e) {
+    toast('创建失败: ' + e.message)
+  }
+})
+
+// Upload
+function openUpload(albumId, albumTitle) {
+  uploadAlbumId = albumId
+  uploadAlbumTitle = albumTitle
+  uploadFiles = []
+  $('uploadTitle').textContent = `上传 - ${albumTitle}`
+  $('uploadPreviews').innerHTML = ''
+  $('progressBar').style.width = '0%'
+  $('uploadBtn').disabled = true
+  $('fileInput').value = ''
+  $('uploadOverlay').classList.add('show')
+}
+
+$('uploadCancel').addEventListener('click', () => {
+  $('uploadOverlay').classList.remove('show')
+  uploadFiles = []
+})
+
+$('fileInput').addEventListener('change', e => {
+  uploadFiles = Array.from(e.target.files || [])
+  if (uploadFiles.length === 0) return
+
+  $('uploadPreviews').innerHTML = uploadFiles.map((f, i) => {
+    const url = URL.createObjectURL(f)
+    return `<div class="upload-preview"><img src="${url}" alt=""><div style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:10px;padding:1px 6px;border-radius:4px">${i+1}</div></div>`
+  }).join('')
+
+  $('uploadBtn').disabled = false
+})
+
+$('uploadBtn').addEventListener('click', async () => {
+  if (uploadFiles.length === 0) return
+  $('uploadBtn').disabled = true
+
+  const total = uploadFiles.length
+  let completed = 0
+  let firstPhotoId = null
+
+  for (let i = 0; i < total; i++) {
+    const file = uploadFiles[i]
+    const ext = file.name.split('.').pop() || 'jpg'
+    const cloudPath = `photos/${uploadAlbumId}/${Date.now()}_${i}.${ext}`
+
+    try {
+      const result = await window._app.uploadFile({
+        cloudPath,
+        filePath: file
+      })
+
+      await cdb.collection('photos').add({
+        data: {
+          albumId: uploadAlbumId,
+          imageUrl: result.fileID,
+          order: Date.now() + i,
+          width: 1365,
+          height: 2048,
+          createTime: new Date()
+        }
+      })
+
+      if (i === 0) {
+        firstPhotoId = result.fileID
+      }
+    } catch (e) {
+      console.error('Upload error:', e)
+    }
+
+    completed++
+    $('progressBar').style.width = (completed / total * 100) + '%'
+  }
+
+  // Set cover if album has no cover
+  if (firstPhotoId) {
+    try {
+      const album = await cdb.collection('albums').doc(uploadAlbumId).get()
+      if (!album.data.coverUrl) {
+        await cdb.collection('albums').doc(uploadAlbumId).update({
+          data: { coverUrl: firstPhotoId }
+        })
+      }
+    } catch (e) {}
+  }
+
+  toast(`上传完成: ${completed}/${total}`)
+  $('uploadOverlay').classList.remove('show')
+  uploadFiles = []
+  loadAlbums()
+})
+
+// Delete Album
+async function deleteAlbum(id, title) {
+  if (!confirm(`确定删除「${title}」吗？里面的照片也会一起删除。`)) return
+
+  try {
+    await cdb.collection('photos').where({ albumId: id }).remove()
+    await cdb.collection('albums').doc(id).remove()
+    toast('已删除')
+    loadAlbums()
+  } catch (e) {
+    toast('删除失败: ' + e.message)
+  }
+}
+</script>
+</body>
+</html>
