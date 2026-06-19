@@ -242,10 +242,14 @@ async function initCloud() {
     if (!_app) throw new Error('SDK 初始化返回空')
 
     const auth = _app.auth()
-    if (typeof auth.signInAnonymously !== 'function') {
-      throw new Error('auth() 返回的对象缺少 signInAnonymously 方法，可用方法: ' + Object.keys(auth).filter(k => typeof auth[k] === 'function').join(', '))
+    if (typeof auth.signInAnonymously === 'function') {
+      await auth.signInAnonymously()
+    } else if (typeof auth.signInWithRedirect === 'function') {
+      await auth.signInWithRedirect()
+    } else {
+      console.log('auth methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(auth)))
     }
-    await auth.signInAnonymously()
+
     cdb = _app.database()
     _cloudReady = true
     console.log('CloudBase connected')
